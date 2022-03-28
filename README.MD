@@ -27,7 +27,7 @@ Try to exit the program with `ctr+c` (you can't exit)
 ## Run with `--store-offsets` turned off (this one does not freeze)
 
 ```rust
-cargo run -- --store-offsets
+cargo run
 ```
 
 Try to exit the program with `ctr+c` (this exits)
