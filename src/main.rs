@@ -51,19 +51,9 @@ async fn main() {
 
     tokio::pin!(shutdown);
 
-    loop {
-        tokio::select! {
-            () = &mut shutdown => {
-                eprintln!("shutdown requested, killing kafka thread...");
-                stop_consumer.store(true, Ordering::SeqCst);
-                break;
-            }
-            _ = &mut idx_thread_recv => {
-                eprintln!("terminated before we got a shutdown signal :(");
-                break;
-            }
-        }
-    }
+    shutdown.await;
+    eprintln!("shutdown requested, killing kafka thread...");
+    stop_consumer.store(true, Ordering::SeqCst);
 
     consume_thread.join().expect("consumer thread to finish");
     handle.close();
@@ -171,11 +161,6 @@ pub fn client_config() -> Result<ClientConfig> {
 
 async fn shutdown(signals: SignalsInfo) {
     let mut signals = signals.fuse();
-
-    select! {
-        _ = signals.next() => {
-        }
-    }
-
+    signals.next().await;
     eprintln!("shutdown function finished");
 }
