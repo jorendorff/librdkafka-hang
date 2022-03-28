@@ -54,12 +54,12 @@ async fn main() {
     loop {
         tokio::select! {
             () = &mut shutdown => {
-                tracing::info!("shutdown requested, killing kafka thread...");
+                eprintln!("shutdown requested, killing kafka thread...");
                 stop_consumer.store(true, Ordering::SeqCst);
                 break;
             }
             _ = &mut idx_thread_recv => {
-                tracing::info!("terminated before we got a shutdown signal :(");
+                eprintln!("terminated before we got a shutdown signal :(");
                 break;
             }
         }
@@ -125,7 +125,7 @@ impl Iterator for PartitionConsumer {
     fn next(&mut self) -> Option<Self::Item> {
         while !self.stop_consumer.load(Ordering::SeqCst) {
             self.store_offset()
-                .unwrap_or_else(|e| tracing::error!("error storing kafka offset: {}", e));
+                .unwrap_or_else(|e| eprintln!("error storing kafka offset: {}", e));
 
             match self.consumer.poll(Duration::from_secs(1)) {
                 Some(Ok(msg)) => {
@@ -136,7 +136,7 @@ impl Iterator for PartitionConsumer {
                     return Some(content);
                 }
                 Some(Err(e)) => {
-                    tracing::error!(
+                    eprintln!(
                         "error polling for kafka message: {}, partition:{}",
                         e,
                         self.partition
@@ -177,5 +177,5 @@ async fn shutdown(signals: SignalsInfo) {
         }
     }
 
-    tracing::info!("shutdown function finished");
+    eprintln!("shutdown function finished");
 }
