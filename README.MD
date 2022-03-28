@@ -21,7 +21,9 @@ docker-compose up -d
 cargo run -- --store-offsets
 ```
 
-Try to exit the program with `ctr+c` (you can't exit)
+The program never prints "`leaving main`" and never exits.
+
+(You can use Ctrl+C to kill it.)
 
 
 ## Run with `--store-offsets` turned off (this one does not freeze)
@@ -30,4 +32,4 @@ Try to exit the program with `ctr+c` (you can't exit)
 cargo run
 ```
 
-Try to exit the program with `ctr+c` (this exits)
+The program prints "`leaving main`" and exits after 3 seconds.

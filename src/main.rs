@@ -1,12 +1,9 @@
 use anyhow::{Context, Result};
-use futures::StreamExt;
 use rdkafka::{
     config::RDKafkaLogLevel,
     consumer::{BaseConsumer, Consumer},
     ClientConfig, Message, Offset, TopicPartitionList,
 };
-use signal_hook::consts::TERM_SIGNALS;
-use signal_hook_tokio::Signals;
 use std::{
     env,
     sync::{
@@ -17,8 +14,7 @@ use std::{
     time::Duration,
 };
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let args = env::args().collect::<Vec<String>>();
     let mut store_offsets = false;
     if args.len() > 1 {
@@ -28,24 +24,23 @@ async fn main() {
     let stop_consumer = Arc::new(AtomicBool::new(false));
     let mut consumer =
         PartitionConsumer::new(stop_consumer.clone(), store_offsets).expect("partition consumer");
-    let signals = Signals::new(TERM_SIGNALS).expect("failed to install signal handler");
-    let handle = signals.handle();
 
-    eprintln!("consuming from kafka");
+    eprintln!("starting consumer thread...");
 
     let consume_thread = thread::spawn(move || {
+        eprintln!("consumer thread started");
         while let Some(msg) = consumer.next() {
             eprintln!("message received: {:?}", msg);
         }
     });
 
-    let mut signals = signals.fuse();
-    signals.next().await;
-    eprintln!("shutdown requested, killing kafka thread...");
+    eprintln!("sleeping 3 seconds...");
+    thread::sleep(Duration::from_secs(3));
+    eprintln!("sleep done, shutting down kafka thread...");
     stop_consumer.store(true, Ordering::SeqCst);
 
     consume_thread.join().expect("consumer thread to finish");
-    handle.close();
+    eprintln!("leaving main");
 }
 
 pub struct PartitionConsumer {
@@ -128,6 +123,7 @@ impl PartitionConsumer {
                 None => {}
             }
         }
+        eprintln!("stop requested, exiting consumer thread");
         None
     }
 }
