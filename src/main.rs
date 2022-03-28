@@ -16,7 +16,6 @@ use std::{
     thread,
     time::Duration,
 };
-use tokio::{select, sync::oneshot};
 
 #[tokio::main]
 async fn main() {
@@ -26,27 +25,20 @@ async fn main() {
         store_offsets = &args[1] == "--store-offsets"
     }
 
-    let client_config = client_config().unwrap();
     let stop_consumer = Arc::new(AtomicBool::new(false));
-    let consumer = PartitionConsumer::new(
-        &client_config,
-        "test",
-        0,
-        stop_consumer.clone(),
-        store_offsets,
-    )
-    .expect("partition consumer");
+    let mut consumer =
+        PartitionConsumer::new(stop_consumer.clone(), store_offsets).expect("partition consumer");
     let signals = Signals::new(TERM_SIGNALS).expect("failed to install signal handler");
     let handle = signals.handle();
 
     let shutdown = shutdown(signals);
 
-    println!("consuming from kafka");
-    let (idx_thread_sender, mut idx_thread_recv) = oneshot::channel::<()>();
+    eprintln!("consuming from kafka");
 
     let consume_thread = thread::spawn(move || {
-        let _idx_thread_sender = idx_thread_sender;
-        consumer.for_each(|msg| println!("msg : {}", msg));
+        while let Some(msg) = consumer.next() {
+            eprintln!("message received: {:?}", msg);
+        }
     });
 
     tokio::pin!(shutdown);
@@ -69,13 +61,22 @@ pub struct PartitionConsumer {
 }
 
 impl PartitionConsumer {
-    fn new(
-        client_config: &ClientConfig,
-        topic: &str,
-        partition: i32,
-        stop_consumer: Arc<AtomicBool>,
-        store_offsets: bool,
-    ) -> Result<Self> {
+    fn new(stop_consumer: Arc<AtomicBool>, store_offsets: bool) -> Result<Self> {
+        let mut client_config = ClientConfig::new();
+        client_config
+            .set("group.id", "test")
+            .set("bootstrap.servers", "localhost:29094")
+            .set("enable.partition.eof", "false")
+            .set("max.poll.interval.ms", "300000") // same as default value
+            .set("heartbeat.interval.ms", "3000") // same as default value
+            .set("session.timeout.ms", "45000") // same as default value
+            .set("enable.auto.offset.store", "false") // We will control the consumer's in-memory offset store
+            .set("enable.auto.commit", "true") // same as default value: let librdkafka handle committing offsets
+            .set("debug", "consumer,cgrp,topic,fetch") // enable very verbose, low-level kafka logging
+            .set_log_level(RDKafkaLogLevel::Debug);
+
+        let topic = "test";
+        let partition = 0;
         let offset = Offset::Beginning;
         let mut topic_partition = TopicPartitionList::new();
         topic_partition
@@ -107,12 +108,8 @@ impl PartitionConsumer {
         }
         Ok(())
     }
-}
 
-impl Iterator for PartitionConsumer {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next(&mut self) -> Option<String> {
         while !self.stop_consumer.load(Ordering::SeqCst) {
             self.store_offset()
                 .unwrap_or_else(|e| eprintln!("error storing kafka offset: {}", e));
@@ -128,8 +125,7 @@ impl Iterator for PartitionConsumer {
                 Some(Err(e)) => {
                     eprintln!(
                         "error polling for kafka message: {}, partition:{}",
-                        e,
-                        self.partition
+                        e, self.partition
                     );
                 }
                 None => {}
@@ -137,26 +133,6 @@ impl Iterator for PartitionConsumer {
         }
         None
     }
-}
-
-/// Return configuration for creating a Kafka consumer or metadata client.
-/// See the [librdkafka documentation](https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html) for options and defaults.
-pub fn client_config() -> Result<ClientConfig> {
-    let mut client_config = ClientConfig::new();
-    client_config
-        .set("group.id", "test")
-        .set("bootstrap.servers", "localhost:29094")
-        .set("enable.partition.eof", "false")
-        .set("max.poll.interval.ms", "300000") // same as default value
-        .set("heartbeat.interval.ms", "3000") // same as default value
-        .set("session.timeout.ms", "45000") // same as default value
-        .set("enable.auto.offset.store", "false") // We will control the consumer's in-memory offset store
-        .set("enable.auto.commit", "true") // same as default value: let librdkafka handle committing offsets
-        // NB: This will enable very verbose, low-level kafka logging
-        .set("debug", "consumer,cgrp,topic,fetch")
-        .set_log_level(RDKafkaLogLevel::Debug);
-
-    Ok(client_config)
 }
 
 async fn shutdown(signals: SignalsInfo) {
