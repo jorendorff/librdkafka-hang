@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # version 5.2.4 is the latest version of the confluent platform container
+  # images that include the version of Kafka we run in production (2.2)
+  #
+  # See: https://docs.confluent.io/platform/current/installation/versions-interoperability.html
+  zookeeper:
+    image: confluentinc/cp-zookeeper:5.2.4
+    container_name: zookeeper
+    restart: always
+    expose:
+      - 2182
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2182
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      start_period: 10s
+      interval: 10s
+      timeout: 1s
+      retries: 10
+      test: ["CMD", "echo", "ruok", "|", "nc", "127.0.0.1", "5111"]
+
+  kafka:
+    image: confluentinc/cp-kafka:6.0.4
+    container_name: kafka
+    restart: always
+    expose:
+      - 29094
+      - 29095
+      - 29096
+    ports:
+      - 29094:29094
+      - 29095:29095
+      - 29096:29096
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2182
+      # Unpleasantness due to seed brokers vs. advertised listeners impedence mismatch
+      # see also: https://rmoff.net/2018/08/02/kafka-listeners-explained/
+      KAFKA_LISTENERS: EXTERNAL://:29094,INTERNAL://:29095,COMPOSE://:29096
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://localhost:29094,INTERNAL://kafka:29095,COMPOSE://kafka:29096
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,COMPOSE:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_MESSAGE_TIMESTAMP_TYPE: LogAppendTime
+    healthcheck:
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      test: ["CMD", "kafka-topics", "--zookeeper", "zookeeper:2182", "--list", "&>/dev/null"]
+

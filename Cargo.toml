@@ -1,0 +1,17 @@
+[package]
+name = "rdkafka-hang"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rdkafka = { version = "0.28", features = ["cmake-build", "ssl"] }
+rdkafka-sys = "=4.2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tokio = { version = "1.16", features = ["full"] }
+signal-hook = "0.3"
+signal-hook-tokio = {version = "0.3", features = ["futures-v0_3"] }
+futures = "0.3"
+
