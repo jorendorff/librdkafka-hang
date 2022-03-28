@@ -30,4 +30,4 @@ Try to exit the program with `ctr+c` (you can't exit)
 cargo run -- --store-offsets
 ```
 
-Try to exit the program with `ctr+c` (this should exit)
+Try to exit the program with `ctr+c` (this exits)
