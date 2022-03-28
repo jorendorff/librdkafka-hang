@@ -1,25 +1,43 @@
-use std::{sync::{atomic::{AtomicBool, Ordering}, Arc}, time::Duration, thread, env};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use futures::StreamExt;
-use rdkafka::{Offset, ClientConfig, TopicPartitionList, consumer::{BaseConsumer, Consumer}, config::RDKafkaLogLevel, Message};
-use signal_hook_tokio::{SignalsInfo, Signals};
-use tokio::{select, sync::oneshot};
+use rdkafka::{
+    config::RDKafkaLogLevel,
+    consumer::{BaseConsumer, Consumer},
+    ClientConfig, Message, Offset, TopicPartitionList,
+};
 use signal_hook::consts::TERM_SIGNALS;
+use signal_hook_tokio::{Signals, SignalsInfo};
+use std::{
+    env,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Duration,
+};
+use tokio::{select, sync::oneshot};
 
 #[tokio::main]
 async fn main() {
     let args = env::args().collect::<Vec<String>>();
     let mut store_offsets = false;
-    if args.len() > 1{
+    if args.len() > 1 {
         store_offsets = &args[1] == "--store-offsets"
     }
 
     let client_config = client_config().unwrap();
     let stop_consumer = Arc::new(AtomicBool::new(false));
-    let consumer = PartitionConsumer::new(&client_config, "test", 0, stop_consumer.clone(), store_offsets).expect("partition consumer");
+    let consumer = PartitionConsumer::new(
+        &client_config,
+        "test",
+        0,
+        stop_consumer.clone(),
+        store_offsets,
+    )
+    .expect("partition consumer");
     let signals = Signals::new(TERM_SIGNALS).expect("failed to install signal handler");
     let handle = signals.handle();
-    
 
     let shutdown = shutdown(signals);
 
@@ -27,8 +45,8 @@ async fn main() {
     let (idx_thread_sender, mut idx_thread_recv) = oneshot::channel::<()>();
 
     let consume_thread = thread::spawn(move || {
-                let _idx_thread_sender = idx_thread_sender;
-                consumer.for_each(|msg| println!("msg : {}", msg));
+        let _idx_thread_sender = idx_thread_sender;
+        consumer.for_each(|msg| println!("msg : {}", msg));
     });
 
     tokio::pin!(shutdown);
@@ -50,13 +68,14 @@ async fn main() {
     consume_thread.join().expect("consumer thread to finish");
     handle.close();
 }
+
 pub struct PartitionConsumer {
     partition: i32,
     consumer: BaseConsumer,
     topic_partition: TopicPartitionList,
     stop_consumer: Arc<AtomicBool>,
     offset: i64,
-    store_offsets :bool
+    store_offsets: bool,
 }
 
 impl PartitionConsumer {
@@ -65,7 +84,7 @@ impl PartitionConsumer {
         topic: &str,
         partition: i32,
         stop_consumer: Arc<AtomicBool>,
-        store_offsets: bool
+        store_offsets: bool,
     ) -> Result<Self> {
         let offset = Offset::Beginning;
         let mut topic_partition = TopicPartitionList::new();
@@ -73,26 +92,25 @@ impl PartitionConsumer {
             .add_partition_offset(topic, partition, offset)
             .with_context(|| format!("failed to set partition {} offset", partition))?;
 
-            let consumer: BaseConsumer = client_config
+        let consumer: BaseConsumer = client_config
             .create()
             .with_context(|| "kafka consumer creation failed")?;
         consumer
             .assign(&topic_partition)
             .with_context(|| "failed to assign to topic partition list")?;
 
-
         Ok(Self {
             consumer,
             partition,
             topic_partition,
             stop_consumer,
-            offset:0, 
-            store_offsets
+            offset: 0,
+            store_offsets,
         })
     }
 
     fn store_offset(&mut self) -> Result<()> {
-        if self.store_offsets{
+        if self.store_offsets {
             self.topic_partition
                 .set_all_offsets(Offset::Offset(self.offset))?;
             self.consumer.store_offsets(&self.topic_partition)?;
@@ -107,22 +125,28 @@ impl Iterator for PartitionConsumer {
     fn next(&mut self) -> Option<Self::Item> {
         while !self.stop_consumer.load(Ordering::SeqCst) {
             self.store_offset()
-            .unwrap_or_else(|e| tracing::error!("error storing kafka offset: {}", e));
+                .unwrap_or_else(|e| tracing::error!("error storing kafka offset: {}", e));
 
-                match self.consumer.poll(Duration::from_secs(1)) {
-                    Some(Ok(msg)) => {
-                        let payload = msg.payload().expect("payload");
-                        let content = std::str::from_utf8(payload).expect("string content").to_string();
-                        return Some(content);
-                    },
-                    Some(Err(e)) => {
-                        tracing::error!("error polling for kafka message: {}, partition:{}", e, self.partition);
-                    }
-                    None => {},
+            match self.consumer.poll(Duration::from_secs(1)) {
+                Some(Ok(msg)) => {
+                    let payload = msg.payload().expect("payload");
+                    let content = std::str::from_utf8(payload)
+                        .expect("string content")
+                        .to_string();
+                    return Some(content);
                 }
+                Some(Err(e)) => {
+                    tracing::error!(
+                        "error polling for kafka message: {}, partition:{}",
+                        e,
+                        self.partition
+                    );
+                }
+                None => {}
+            }
         }
-    None
-   }
+        None
+    }
 }
 
 /// Return configuration for creating a Kafka consumer or metadata client.
@@ -144,7 +168,6 @@ pub fn client_config() -> Result<ClientConfig> {
 
     Ok(client_config)
 }
-
 
 async fn shutdown(signals: SignalsInfo) {
     let mut signals = signals.fuse();
