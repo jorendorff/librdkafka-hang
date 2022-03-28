@@ -21,7 +21,7 @@ docker-compose up -d
 cargo run -- --store-offsets
 ```
 
-Try to exit the program with `ctr+c` (you can't exit, you must exit the program)
+Try to exit the program with `ctr+c` (you can't exit)
 
 
 ## Run with `--store-offsets` turned off (this one does not freeze)
@@ -30,4 +30,4 @@ Try to exit the program with `ctr+c` (you can't exit, you must exit the program)
 cargo run -- --store-offsets
 ```
 
-Try to exit the program with `ctr+c` (you can't exit, you must exit the program)
+Try to exit the program with `ctr+c` (this should exit)
