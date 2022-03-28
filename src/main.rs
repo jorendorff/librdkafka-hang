@@ -6,7 +6,7 @@ use rdkafka::{
     ClientConfig, Message, Offset, TopicPartitionList,
 };
 use signal_hook::consts::TERM_SIGNALS;
-use signal_hook_tokio::{Signals, SignalsInfo};
+use signal_hook_tokio::Signals;
 use std::{
     env,
     sync::{
@@ -31,8 +31,6 @@ async fn main() {
     let signals = Signals::new(TERM_SIGNALS).expect("failed to install signal handler");
     let handle = signals.handle();
 
-    let shutdown = shutdown(signals);
-
     eprintln!("consuming from kafka");
 
     let consume_thread = thread::spawn(move || {
@@ -41,9 +39,8 @@ async fn main() {
         }
     });
 
-    tokio::pin!(shutdown);
-
-    shutdown.await;
+    let mut signals = signals.fuse();
+    signals.next().await;
     eprintln!("shutdown requested, killing kafka thread...");
     stop_consumer.store(true, Ordering::SeqCst);
 
@@ -133,10 +130,4 @@ impl PartitionConsumer {
         }
         None
     }
-}
-
-async fn shutdown(signals: SignalsInfo) {
-    let mut signals = signals.fuse();
-    signals.next().await;
-    eprintln!("shutdown function finished");
 }
