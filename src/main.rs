@@ -13,11 +13,11 @@ fn main() {
     let args = env::args().skip(1).collect::<Vec<String>>();
     let store_offsets = args == vec!["--store-offsets"];
 
-    let mut consumer =
-        PartitionConsumer::new(store_offsets).expect("partition consumer");
-
-    while let Some(msg) = consumer.next() {
-        eprintln!("message received: {:?}", msg);
+    {
+        let mut consumer = PartitionConsumer::new(store_offsets).expect("partition consumer");
+        while let Some(msg) = consumer.next() {
+            eprintln!("message received: {:?}", msg);
+        }
     }
 
     eprintln!("leaving main");
