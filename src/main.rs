@@ -15,11 +15,8 @@ use std::{
 };
 
 fn main() {
-    let args = env::args().collect::<Vec<String>>();
-    let mut store_offsets = false;
-    if args.len() > 1 {
-        store_offsets = &args[1] == "--store-offsets"
-    }
+    let args = env::args().skip(1).collect::<Vec<String>>();
+    let store_offsets = args == vec!["--store-offsets"];
 
     let stop_consumer = Arc::new(AtomicBool::new(false));
     let mut consumer =
@@ -69,10 +66,9 @@ impl PartitionConsumer {
 
         let topic = "test";
         let partition = 0;
-        let offset = Offset::Beginning;
         let mut topic_partition = TopicPartitionList::new();
         topic_partition
-            .add_partition_offset(topic, partition, offset)
+            .add_partition_offset(topic, partition, Offset::Beginning)
             .with_context(|| format!("failed to set partition {} offset", partition))?;
 
         let consumer: BaseConsumer = client_config
