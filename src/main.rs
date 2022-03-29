@@ -92,19 +92,19 @@ impl PartitionConsumer {
         })
     }
 
-    fn store_offset(&mut self) -> Result<()> {
+    fn store_offset(&mut self) {
         if self.store_offsets {
             self.topic_partition
-                .set_all_offsets(Offset::Offset(self.offset))?;
-            self.consumer.store_offsets(&self.topic_partition)?;
+                .set_all_offsets(Offset::Offset(self.offset))
+                .expect("error updating partition list");
+            self.consumer.store_offsets(&self.topic_partition)
+                .expect("error storing offsets");
         }
-        Ok(())
     }
 
     fn next(&mut self) -> Option<String> {
         while !self.stop_consumer.load(Ordering::SeqCst) {
-            self.store_offset()
-                .unwrap_or_else(|e| eprintln!("error storing kafka offset: {}", e));
+            self.store_offset();
 
             match self.consumer.poll(Duration::from_secs(1)) {
                 Some(Ok(msg)) => {
