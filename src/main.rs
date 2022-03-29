@@ -5,7 +5,7 @@ use rdkafka::{
 };
 use std::{
     env,
-    time::{Instant, Duration},
+    time::{Duration, Instant},
 };
 
 fn main() {
@@ -33,33 +33,24 @@ fn run_test(store_offsets: bool) {
         .add_partition_offset(topic, partition, Offset::Beginning)
         .unwrap();
 
-    let consumer: BaseConsumer = client_config
-        .create().unwrap();
-    consumer
-        .assign(&topic_partition)
-        .unwrap();
+    let consumer: BaseConsumer = client_config.create().unwrap();
+    consumer.assign(&topic_partition).unwrap();
 
     let start_time = Instant::now();
 
     while start_time.elapsed() < Duration::from_secs(3) {
         if store_offsets {
-            topic_partition
-                .set_all_offsets(Offset::Offset(0))
-                .unwrap();
-            consumer.store_offsets(&topic_partition)
-                .unwrap();
+            topic_partition.set_all_offsets(Offset::Offset(0)).unwrap();
+            consumer.store_offsets(&topic_partition).unwrap();
         }
 
         match consumer.poll(Duration::from_secs(1)) {
             Some(Ok(msg)) => {
                 let payload = msg.payload().unwrap();
-                let content = std::str::from_utf8(payload)
-                    .unwrap()
-                    .to_string();
+                let content = std::str::from_utf8(payload).unwrap().to_string();
                 eprintln!("message received: {:?}", content);
             }
-            Some(Err(e)) =>
-                eprintln!("error polling for kafka message: {}", e),
+            Some(Err(e)) => eprintln!("error polling for kafka message: {}", e),
             None => {}
         }
     }
