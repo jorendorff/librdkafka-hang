@@ -21,7 +21,7 @@ docker-compose up -d
 cargo run -- --store-offsets
 ```
 
-The program never prints "`leaving main`" and never exits.
+The program prints "`leaving main`", but it never exits.
 
 (You can use Ctrl+C to kill it.)
 

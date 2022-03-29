@@ -24,19 +24,18 @@ fn main() {
 
     eprintln!("starting consumer thread...");
 
-    let consume_thread = thread::spawn(move || {
-        eprintln!("consumer thread started");
-        while let Some(msg) = consumer.next() {
-            eprintln!("message received: {:?}", msg);
-        }
+    let shutdown_thread = thread::spawn(move || {
+        eprintln!("sleeping 3 seconds...");
+        thread::sleep(Duration::from_secs(3));
+        eprintln!("sleep done, shutting down kafka thread...");
+        stop_consumer.store(true, Ordering::SeqCst);
     });
 
-    eprintln!("sleeping 3 seconds...");
-    thread::sleep(Duration::from_secs(3));
-    eprintln!("sleep done, shutting down kafka thread...");
-    stop_consumer.store(true, Ordering::SeqCst);
+    while let Some(msg) = consumer.next() {
+        eprintln!("message received: {:?}", msg);
+    }
 
-    consume_thread.join().expect("consumer thread to finish");
+    shutdown_thread.join().expect("shutdown thread to finish");
     eprintln!("leaving main");
 }
 
