@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
 use rdkafka::{
     config::RDKafkaLogLevel,
     consumer::{BaseConsumer, Consumer},
+    error::KafkaError,
     ClientConfig, Message, Offset, TopicPartitionList,
 };
 use std::{
@@ -12,26 +12,14 @@ use std::{
 fn main() {
     let args = env::args().skip(1).collect::<Vec<String>>();
     let store_offsets = args == vec!["--store-offsets"];
-
-    {
-        let mut consumer = PartitionConsumer::new(store_offsets).expect("partition consumer");
-        while let Some(msg) = consumer.next() {
-            eprintln!("message received: {:?}", msg);
-        }
-    }
-
+    PartitionConsumer::new(store_offsets).unwrap();
     eprintln!("leaving main");
 }
 
-pub struct PartitionConsumer {
-    consumer: BaseConsumer,
-    topic_partition: TopicPartitionList,
-    start_time: Instant,
-    store_offsets: bool,
-}
+pub struct PartitionConsumer {}
 
 impl PartitionConsumer {
-    fn new(store_offsets: bool) -> Result<Self> {
+    fn new(store_offsets: bool) -> Result<(), KafkaError> {
         let mut client_config = ClientConfig::new();
         client_config
             .set("group.id", "test")
@@ -47,44 +35,32 @@ impl PartitionConsumer {
         let mut topic_partition = TopicPartitionList::new();
         topic_partition
             .add_partition_offset(topic, partition, Offset::Beginning)
-            .with_context(|| format!("failed to set partition {} offset", partition))?;
+            .unwrap();
 
         let consumer: BaseConsumer = client_config
-            .create()
-            .with_context(|| "kafka consumer creation failed")?;
+            .create().unwrap();
         consumer
             .assign(&topic_partition)
-            .with_context(|| "failed to assign to topic partition list")?;
+            .unwrap();
 
-        Ok(Self {
-            consumer,
-            topic_partition,
-            start_time: Instant::now(),
-            store_offsets,
-        })
-    }
+        let start_time = Instant::now();
 
-    fn store_offset(&mut self) {
-        if self.store_offsets {
-            self.topic_partition
-                .set_all_offsets(Offset::Offset(0))
-                .expect("error updating partition list");
-            self.consumer.store_offsets(&self.topic_partition)
-                .expect("error storing offsets");
-        }
-    }
+        while start_time.elapsed() < Duration::from_secs(3) {
+            if store_offsets {
+                topic_partition
+                    .set_all_offsets(Offset::Offset(0))
+                    .unwrap();
+                consumer.store_offsets(&topic_partition)
+                    .unwrap();
+            }
 
-    fn next(&mut self) -> Option<String> {
-        while self.start_time.elapsed() < Duration::from_secs(3) {
-            self.store_offset();
-
-            match self.consumer.poll(Duration::from_secs(1)) {
+            match consumer.poll(Duration::from_secs(1)) {
                 Some(Ok(msg)) => {
-                    let payload = msg.payload().expect("payload");
+                    let payload = msg.payload().unwrap();
                     let content = std::str::from_utf8(payload)
-                        .expect("string content")
+                        .unwrap()
                         .to_string();
-                    return Some(content);
+                    eprintln!("message received: {:?}", content);
                 }
                 Some(Err(e)) =>
                     eprintln!("error polling for kafka message: {}", e),
@@ -92,6 +68,6 @@ impl PartitionConsumer {
             }
         }
         eprintln!("3 seconds passed, exiting");
-        None
+        Ok(())
     }
 }
