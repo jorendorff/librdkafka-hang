@@ -14,8 +14,53 @@ void config(rd_kafka_conf_t *conf, const char *key, const char *value) {
   }
 }
 
+static int store_offsets;
+
+// Note: Copied from the documentation for `rd_kafka_conf_set_rebalance_cb`.
+static void rebalance_cb(rd_kafka_t *rk, rd_kafka_resp_err_t err,
+                         rd_kafka_topic_partition_list_t *partitions,
+                         void *opaque) {
+  switch (err) {
+  case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+    // application may load offets from arbitrary external
+    // storage here and update \p partitions
+    if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
+      rd_kafka_incremental_assign(rk, partitions);
+    else // EAGER
+      rd_kafka_assign(rk, partitions);
+    break;
+
+  case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+    if (store_offsets) // Optional explicit manual commit
+      rd_kafka_commit(rk, partitions, 0); // sync commit
+
+    if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
+      rd_kafka_incremental_unassign(rk, partitions);
+    else // EAGER
+      rd_kafka_assign(rk, NULL);
+    break;
+
+  default:
+    fprintf(stderr, "rebalance_cb: unrecogized error: %s\n", rd_kafka_err2str(err));
+    rd_kafka_assign(rk, NULL); // sync state
+    break;
+  }
+}
+
+void offset_commit_cb(rd_kafka_t *rk,
+                      rd_kafka_resp_err_t err,
+                      rd_kafka_topic_partition_list_t *offsets,
+                      void *opaque) {
+  fprintf(stderr, "\n*** commit: %s\n", rd_kafka_err2str(err));
+  for (int i = 0; i < offsets->cnt; i++) {
+    rd_kafka_topic_partition_t *tp = &offsets->elems[i];
+    fprintf(stderr, "  topic '%s' partition %d: offset %ld\n", tp->topic, (int) tp->partition, (long int) tp->offset);
+  }
+  fprintf(stderr, "\n");
+}
+
 int main(int argc, const char *argv[]) {
-  int store_offsets = (argc == 2 && strcmp(argv[1], "--store-offsets") == 0);
+  store_offsets = (argc == 2 && strcmp(argv[1], "--store-offsets") == 0);
 
   rd_kafka_topic_partition_list_t *tpl = rd_kafka_topic_partition_list_new(1);
   if (!tpl) {
@@ -49,6 +94,9 @@ int main(int argc, const char *argv[]) {
     fprintf(stderr, "rd_kafka_new failed: %s\n", err_buf);
     exit(1);
   }
+
+  rd_kafka_conf_set_rebalance_cb(conf, rebalance_cb);
+  rd_kafka_conf_set_offset_commit_cb(conf, offset_commit_cb);
 
   err = rd_kafka_assign(client, tpl);
   if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
