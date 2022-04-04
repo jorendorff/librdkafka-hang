@@ -85,7 +85,7 @@ int main(int argc, const char *argv[]) {
   config(conf, "enable.partition.eof", "false");
   config(conf, "enable.auto.offset.store", "false");
   config(conf, "enable.auto.commit", "true");
-  config(conf, "debug", "consumer,cgrp,topic,fetch");
+  config(conf, "debug", "consumer,cgrp,topic,fetch,broker");
 
   rd_kafka_conf_set_rebalance_cb(conf, rebalance_cb);
   rd_kafka_conf_set_offset_commit_cb(conf, offset_commit_cb);
