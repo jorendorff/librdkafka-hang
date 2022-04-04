@@ -119,7 +119,7 @@ int main(int argc, const char *argv[]) {
 
     if (store_offsets) {
       tpl->elems[0].offset = message->offset + 1;
-      err= rd_kafka_offsets_store(client, tpl);
+      err = rd_kafka_offsets_store(client, tpl);
       if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
         fprintf(stderr, "rd_kafka_offsets_store failed: %s\n", rd_kafka_err2str(err));
         exit(1);
