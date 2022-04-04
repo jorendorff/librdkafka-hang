@@ -87,6 +87,9 @@ int main(int argc, const char *argv[]) {
   config(conf, "enable.auto.commit", "true");
   config(conf, "debug", "consumer,cgrp,topic,fetch");
 
+  rd_kafka_conf_set_rebalance_cb(conf, rebalance_cb);
+  rd_kafka_conf_set_offset_commit_cb(conf, offset_commit_cb);
+
   char err_buf[200];
   rd_kafka_conf_set_opaque(conf, NULL);
   rd_kafka_t *client = rd_kafka_new(RD_KAFKA_CONSUMER, conf, err_buf, sizeof err_buf);
@@ -94,9 +97,6 @@ int main(int argc, const char *argv[]) {
     fprintf(stderr, "rd_kafka_new failed: %s\n", err_buf);
     exit(1);
   }
-
-  rd_kafka_conf_set_rebalance_cb(conf, rebalance_cb);
-  rd_kafka_conf_set_offset_commit_cb(conf, offset_commit_cb);
 
   err = rd_kafka_assign(client, tpl);
   if (err != RD_KAFKA_RESP_ERR_NO_ERROR) {
