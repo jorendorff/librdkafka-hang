@@ -39,7 +39,7 @@ fn run_test(store_offsets: bool) {
                 let content = std::str::from_utf8(payload).unwrap();
                 eprintln!("message received: {:?}", content);
                 if store_offsets {
-                    let offset = Offset::Offset(msg.offset());
+                    let offset = Offset::Offset(msg.offset() + 1);
                     topic_partition.set_all_offsets(offset).unwrap();
                     consumer.store_offsets(&topic_partition).unwrap();
                 }
